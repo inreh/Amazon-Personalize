@@ -12,12 +12,9 @@ declare(strict_types=1);
 
 namespace CustomerParadigm\AmazonPersonalize\Model\Data;
 
-use CustomerParadigm\AmazonPersonalize\Model\ResourceModel\Data\Interaction\ReportEvent\CollectionFactory as
-InteractionReportCollectionFactory;
-use CustomerParadigm\AmazonPersonalize\Model\ResourceModel\Data\Interaction\PurchaseEvent\CollectionFactory as
-InteractionPurchaseCollectionFactory;
-use CustomerParadigm\AmazonPersonalize\Model\ResourceModel\InteractionCheck\CollectionFactory as
-InteractionCheckCollectionFactory;
+use CustomerParadigm\AmazonPersonalize\Model\ResourceModel\Data\Interaction\ReportEvent\CollectionFactory as InteractionReportCollectionFactory;
+use CustomerParadigm\AmazonPersonalize\Model\ResourceModel\Data\Interaction\PurchaseEvent\CollectionFactory as InteractionPurchaseCollectionFactory;
+use CustomerParadigm\AmazonPersonalize\Model\ResourceModel\InteractionCheck\CollectionFactory as InteractionCheckCollectionFactory;
 use Magento\Framework\App\Filesystem\DirectoryList;
 use Magento\Framework\Filesystem\Driver\File;
 use Magento\Framework\Filesystem\File\WriteFactory;
@@ -28,8 +25,10 @@ use CustomerParadigm\AmazonPersonalize\Helper\Data;
 class InteractionGenerator extends \CustomerParadigm\AmazonPersonalize\Model\Data\AbstractGenerator
 {
     protected $enablePadding = true;
-    /*
+
+    /**
      * Array containing csv header keys
+     * @var array
      */
     protected $csvHeaders = [
         'USER_ID',
@@ -38,15 +37,45 @@ class InteractionGenerator extends \CustomerParadigm\AmazonPersonalize\Model\Dat
         'TIMESTAMP'
     ];
 
+    /**
+     * @var string
+     */
     protected $filename = "interactions";
+
+    /**
+     * @var InfoLogger
+     */
     protected $infoLogger;
+
+    /**
+     * @var ErrorLogger
+     */
     protected $errorLogger;
+
+    /**
+     * @var Data
+     */
     protected $pHelper;
+
+    /**
+     * @var int
+     */
     protected $itemCount;
 
-
-    private $interactionPurchaseCollectionFactory;
+    /**
+     * @var InteractionReportCollectionFactory
+     */
     private $interactionReportCollectionFactory;
+
+    /**
+     * @var InteractionPurchaseCollectionFactory
+     */
+    private $interactionPurchaseCollectionFactory;
+
+    /**
+     * @var InteractionCheckCollectionFactory
+     */
+    private $interactionCheckCollectionFactory;
 
     public function __construct(
         InteractionReportCollectionFactory $interactionReportCollectionFactory,
@@ -72,8 +101,8 @@ class InteractionGenerator extends \CustomerParadigm\AmazonPersonalize\Model\Dat
     {
         try {
             $months = $this->pHelper->getConfigValue('awsp_settings/awsp_general/data_range');
-            $rstart_date =  date("Y-m-d", strtotime("-$months months"));
-            $pstart_date =  date("Y-m-d", strtotime("-$months months"));
+            $rstart_date = date("Y-m-d", strtotime("-$months months"));
+            $pstart_date = date("Y-m-d", strtotime("-$months months"));
             $max_records = 2000;
 
             // bypass all the collection counting if file is already created with > 1000 entries
@@ -83,9 +112,19 @@ class InteractionGenerator extends \CustomerParadigm\AmazonPersonalize\Model\Dat
                 return $this;
             }
 
-            $reportInteractions = $this->interactionReportCollectionFactory->create()->addFieldToFilter('last_visit_at', ['gt' => $rstart_date])->setOrder('event_id', 'desc')->setPageSize($max_records);
-            $purchaseInteractions = $this->interactionPurchaseCollectionFactory->create()->addFieldToFilter('sales_order.updated_at', ['gt' =>  $pstart_date])->setOrder('order_id', 'desc')->setPageSize($max_records);
-            $addedInteractions = $this->interactionCheckCollectionFactory->create()->setOrder('interaction_check_id', 'desc')->setPageSize($max_records);
+            $reportInteractions = $this->interactionReportCollectionFactory->create()
+                ->addFieldToFilter('last_visit_at', ['gt' => $rstart_date])
+                ->setOrder('event_id', 'desc')
+                ->setPageSize($max_records);
+                
+            $purchaseInteractions = $this->interactionPurchaseCollectionFactory->create()
+                ->addFieldToFilter('sales_order.updated_at', ['gt' => $pstart_date])
+                ->setOrder('order_id', 'desc')
+                ->setPageSize($max_records);
+                
+            $addedInteractions = $this->interactionCheckCollectionFactory->create()
+                ->setOrder('interaction_check_id', 'desc')
+                ->setPageSize($max_records);
 
             $rcount = count($reportInteractions);
             $pcount = count($purchaseInteractions);
@@ -103,36 +142,38 @@ class InteractionGenerator extends \CustomerParadigm\AmazonPersonalize\Model\Dat
                 ->writeCollectionToCsv($reportInteractions)
                 ->writeCollectionToCsv($purchaseInteractions)
                 ->writeCollectionToCsv($addedInteractions);
-            // pad interactions if fewer than 1000
 
+            // pad interactions if fewer than 1000
             if ($this->enablePadding && $total < 1000) {
                 $this->infoLogger->info("InteractionGenerator padding enabled");
                 $count = 1;
                 $diff = 1010 - $total; // a few extra
-            //    $total = 0; // reset
                 while ($diff > 0) {
                     $user_id = 1000 % $diff;
                     $item_id = 1010 - $diff;
                     $timestamp = time();
-                    $this->writer->writeCsv([$user_id,$item_id,'none',$timestamp]);
+                    $this->writer->writeCsv([$user_id, $item_id, 'none', $timestamp]);
                     $diff--;
                     $count++;
                 }
                 $total += $count;
             }
+
             $this->setItemCount($total);
             $this->writer->close();
+
             $this->pHelper->setConfigValue("awsp_settings/awsp_general/order-interactions-count", $rcount + $pcount);
             $this->pHelper->setConfigValue("awsp_settings/awsp_general/file-interactions-count", $total);
-            // Aws needs at least 1000 interactions
+
             if ($total < 1000) {
                 $this->setDataError("too_few_interactions:$total");
                 $this->errorLogger->error("Not enough interactions in csv. Total: $total");
             }
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
             $mssg = $e->getMessage();
             $this->errorLogger->error("InteractionGenerator Processing error: $mssg");
         }
+
         return $this;
     }
 

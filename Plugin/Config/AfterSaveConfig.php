@@ -48,16 +48,41 @@ class AfterSaveConfig
     /**
      * @var CustomerParadigm\AmazonPersonalize\Helper\Db
      */
-
     protected $awsHelper;
 
+    /**
+     * @var AwsSdkClient
+     */
     protected $sdkClient;
 
+    /**
+     * @var \Aws\Sts\StsClient
+     */
     protected $stsClient;
-    
+
+    /**
+     * @var string
+     */
+    protected $cred_dir;
+
+    /**
+     * @var string
+     */
     protected $config_dir;
+
+    /**
+     * @var string
+     */
     protected $cred_file;
+
+    /**
+     * @var string
+     */
     protected $config_file;
+
+    /**
+     * @var string
+     */
     protected $htaccess_file;
 
     /**
@@ -82,11 +107,11 @@ class AfterSaveConfig
         $this->awsHelper = $awsHelper;
         $this->sdkClient = $sdkClient;
         $this->stsClient = $this->sdkClient->getClient('sts');
-	$this->cred_dir = $this->moduleDir->getPath('media');
-	$this->config_dir = $this->cred_dir .'/.aws';
-	$this->cred_file = $this->cred_dir . '/.aws/credentials';
-	$this->config_file = $this->cred_dir . '/.aws/config';
-	$this->htaccess_file = $this->cred_dir . '/.aws/.htaccess';
+        $this->cred_dir = $this->moduleDir->getPath('media');
+        $this->config_dir = $this->cred_dir .'/.aws';
+        $this->cred_file = $this->cred_dir . '/.aws/credentials';
+        $this->config_file = $this->cred_dir . '/.aws/config';
+        $this->htaccess_file = $this->cred_dir . '/.aws/.htaccess';
     }
 
     public function afterSave(\Magento\Config\Model\Config $subject, $result)
@@ -102,20 +127,20 @@ class AfterSaveConfig
             }
             // Set credentials for aws php sdk
             try {
-                if ($this->awsHelper->isEc2Install()) { // Save account numeber but not other creds if module is installed on an EC2 instance
+                if ($this->awsHelper->isEc2Install()) { // Save account number but not other creds if module is installed on an EC2 instance
                     $value = $this->stsClient->GetCallerIdentity()['Account'];
                     $this->pConfig->saveConfigSetting('awsp_settings/awsp_general/aws_acct', $value);
                     return $result;
                 }
 
-		$region = $this->pConfig->getAwsRegion();
-		// Db stored values
-		$access_key = $this->pConfig->checkAkEncrypted($this->pConfig->getAccessKey(),$this->cred_file);
-		$secret_key = $this->pConfig->checkSkEncrypted($this->pConfig->getSecretKey(),$this->cred_file);
+                $region = $this->pConfig->getAwsRegion();
+                // Db stored values
+                $access_key = $this->pConfig->checkAkEncrypted($this->pConfig->getAccessKey(), $this->cred_file);
+                $secret_key = $this->pConfig->checkSkEncrypted($this->pConfig->getSecretKey(), $this->cred_file);
 
-		$save_key = $access_key;
-		$save_secret = $secret_key;
-		$this->pConfig->saveKeys($access_key, $secret_key);
+                $save_key = $access_key;
+                $save_secret = $secret_key;
+                $this->pConfig->saveKeys($access_key, $secret_key);
 
                 $cmd = "mkdir -p $this->config_dir && touch $this->config_file";
                 $output = $this->shell->execute($cmd);
@@ -124,25 +149,24 @@ class AfterSaveConfig
                 $cmd = "touch $this->htaccess_file";
                 $output = $this->shell->execute($cmd);
                 $htaccess_entry = 'Deny from all';
-                $cmd = 'echo "'. $htaccess_entry . '" >' . $this->htaccess_file;
+                $cmd = 'echo "' . $htaccess_entry . '" >' . $this->htaccess_file;
                 $output = $this->shell->execute($cmd);
 
                 $cred_entry = "[default]
-					aws_access_key_id = $save_key
-					aws_secret_access_key = $save_secret";
+                                        aws_access_key_id = $save_key
+                                        aws_secret_access_key = $save_secret";
 
-                $cmd = 'echo "'. $cred_entry . '" >' . $this->cred_file;
+                $cmd = 'echo "' . $cred_entry . '" >' . $this->cred_file;
                 $output = $this->shell->execute($cmd);
 
                 $config_entry = "[default]
-					region=$region
-					output=json";
+                                        region=$region
+                                        output=json";
 
-                $cmd = 'echo "'. $config_entry . '" >' . $this->config_file;
+                $cmd = 'echo "' . $config_entry . '" >' . $this->config_file;
                 $output = $this->shell->execute($cmd);
 
-
-                $procStatus =  $this->wizardTracking->getProcessStatus()['status'];
+                $procStatus = $this->wizardTracking->getProcessStatus()['status'];
 
                 // Enable/disable cron based on process status
                 if ($this->pConfig->isEnabled() == false || $procStatus == 'hasError' || $procStatus == 'finished') {
